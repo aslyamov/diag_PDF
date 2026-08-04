@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Convert PGN/FEN/EPD chess files to professional PDF diagrams — free, in your browser">
+  <title>DiagPDF Web — Chess Diagram PDF Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body class="font-sans antialiased bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen">
+
+  <!-- ═══ Top Bar ═══ -->
+  <header class="sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-gray-950/70 border-b border-gray-200 dark:border-gray-800">
+    <div class="max-w-screen-2xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">♔ DiagPDF</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-theme" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Toggle theme">
+          <svg id="icon-sun" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg id="icon-moon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+        <button id="btn-lang" class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">RU</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ Main Content ═══ -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8">
+
+    <!-- ─── Settings Sidebar ─── -->
+    <aside id="sidebar" class="w-full lg:w-[460px] lg:shrink-0 space-y-4">
+
+      <!-- Files -->
+      <section id="section-files" class="card">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="section_files">Files</h2>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3">
+          <div id="drop-zone" class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all group flex items-center justify-center gap-3">
+            <input type="file" id="file-input" accept=".pgn,.fen,.epd" class="hidden">
+            <svg class="w-6 h-6 text-gray-400 dark:text-gray-600 group-hover:text-indigo-500 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            <p class="text-xs text-gray-500 dark:text-gray-400 text-left leading-tight" data-i18n="drop_hint">Drop .pgn / .fen / .epd file here or click to browse</p>
+          </div>
+          <p id="file-status" class="mt-2 text-xs text-gray-500 dark:text-gray-400" data-i18n="no_file">No file loaded</p>
+        </div>
+      </section>
+
+      <!-- Cover Page -->
+      <section id="section-cover" class="card collapsed">
+        <div class="card-header">
+          <div class="flex items-center gap-3">
+            <h2 class="card-title" data-i18n="section_cover">Cover Page</h2>
+            <label class="toggle" onclick="event.stopPropagation()">
+              <input type="checkbox" id="opt-cover-enable">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3">
+          <div id="cover-fields" class="space-y-3 hidden">
+            <div>
+              <label class="label" data-i18n="cover_title">Title:</label>
+              <input type="text" id="opt-cover-title" class="input" value="Шахматные задачи">
+            </div>
+            <div>
+              <label class="label" data-i18n="cover_subtitle">Subtitle:</label>
+              <input type="text" id="opt-cover-subtitle" class="input" value="Мат в 1 ход">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label" data-i18n="cover_author">Author:</label>
+                <input type="text" id="opt-cover-author" class="input" value="Иванов Иванов">
+              </div>
+              <div>
+                <label class="label" data-i18n="cover_date">Date:</label>
+                <input type="text" id="opt-cover-date" class="input">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Table of Contents -->
+      <section id="section-toc" class="card collapsed">
+        <div class="card-header">
+          <div class="flex items-center gap-3">
+            <h2 class="card-title" data-i18n="section_toc">Table of Contents</h2>
+            <label class="toggle" onclick="event.stopPropagation()">
+              <input type="checkbox" id="opt-toc-enable">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3">
+          <div id="toc-fields" class="hidden">
+            <label class="label" data-i18n="toc_title">TOC title:</label>
+            <input type="text" id="opt-toc-title" class="input" value="Оглавление">
+          </div>
+        </div>
+      </section>
+
+      <!-- Chapters -->
+      <section id="section-chapters" class="card collapsed">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="section_chapters">Chapters</h2>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3">
+          <div id="chapters-list" class="space-y-2"></div>
+          <button id="btn-add-chapter" class="mt-3 w-full py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors" data-i18n="add_chapter">+ Add chapter</button>
+        </div>
+      </section>
+
+      <!-- Diagram Settings -->
+      <section id="section-diagram" class="card collapsed">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="section_diagram">Diagram</h2>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3 space-y-4">
+          <!-- Layout -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" data-i18n="layout">Layout:</label>
+              <select id="opt-layout" class="input"></select>
+            </div>
+            <div>
+              <label class="label" data-i18n="font">Font:</label>
+              <select id="opt-font" class="input">
+                <option value="AlphaDG">AlphaDG</option>
+                <option value="LeipzigDG">LeipzigDG</option>
+                <option value="CondalDG">CondalDG</option>
+                <option value="KingdomDG">KingdomDG</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Options Grid -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" data-i18n="symbol">Move indicator:</label>
+              <select id="opt-symbol" class="input">
+                <option value="square" data-i18n="sym_square">Square</option>
+                <option value="circle" data-i18n="sym_circle">Circle</option>
+                <option value="triangle" data-i18n="sym_triangle">Triangle</option>
+              </select>
+            </div>
+            <div>
+              <label class="label" data-i18n="orient">Orientation:</label>
+              <select id="opt-orient" class="input">
+                <option value="auto" data-i18n="orient_auto">Auto</option>
+                <option value="white" data-i18n="orient_white">White ↓</option>
+                <option value="black" data-i18n="orient_black">Black ↓</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Lines per diagram -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" data-i18n="lines_count">Lines per diagram:</label>
+              <select id="opt-lines-count" class="input">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+            <div>
+              <label class="label" data-i18n="lines_mode">Line mode:</label>
+              <select id="opt-lines-mode" class="input">
+                <option value="plain" data-i18n="lines_plain">Plain</option>
+                <option value="numbered" data-i18n="lines_numbered">Numbered</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Title mode -->
+          <div>
+            <label class="label" data-i18n="title_source">Title:</label>
+            <select id="opt-title-mode" class="input">
+              <option value="number" data-i18n="title_number" selected>Number</option>
+              <option value="comment" data-i18n="title_comment">PGN comment</option>
+              <option value="custom" data-i18n="title_custom_lbl">Custom text</option>
+            </select>
+            <input type="text" id="opt-title-custom" class="input mt-2 hidden" placeholder="Custom title text">
+          </div>
+
+          <!-- Coordinates & Lichess -->
+          <div class="flex items-center gap-6 pt-1">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="opt-coords" checked class="checkbox">
+              <span class="text-sm text-gray-700 dark:text-gray-300" data-i18n="coords">Show coordinates</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="opt-lichess" class="checkbox">
+              <span class="text-sm text-gray-700 dark:text-gray-300" data-i18n="lichess_link">Lichess links</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Answers -->
+      <section id="section-answers" class="card collapsed">
+        <div class="card-header">
+          <div class="flex items-center gap-3">
+            <h2 class="card-title" data-i18n="section_answers">Answers</h2>
+            <label class="toggle" onclick="event.stopPropagation()">
+              <input type="checkbox" id="opt-answers-enable">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <svg class="card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="card-body mt-3">
+          <div id="answers-fields" class="space-y-3 hidden">
+            <div>
+              <label class="label" data-i18n="answers_title">Answers title:</label>
+              <input type="text" id="opt-answers-title" class="input" value="Solutions">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label" data-i18n="answers_cols">Columns:</label>
+                <select id="opt-answers-cols" class="input">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+              <div>
+                <label class="label" data-i18n="figurine_font">Figurine font:</label>
+                <select id="opt-figurine-font" class="input">
+                  <option value="Zurich">Zurich</option>
+                  <option value="Hastings">Hastings</option>
+                  <option value="Linares">Linares</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ─── Preview Area ─── -->
+    <div class="flex-1 flex flex-col items-center">
+      <!-- Preview container -->
+      <div id="preview-container" class="w-full max-w-2xl">
+        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <!-- Preview pages -->
+          <div id="preview-viewport" class="aspect-[210/297] w-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+            <canvas id="preview-canvas" class="max-h-full max-w-full rounded shadow-lg"></canvas>
+          </div>
+          <!-- Page navigation -->
+          <div class="flex items-center justify-center gap-3 py-3 border-t border-gray-200 dark:border-gray-800 text-sm">
+            <button id="btn-prev-page" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-30 cursor-pointer" title="Previous page" disabled>
+              <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div class="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+              <span data-i18n="section_page">Page</span>
+              <input type="number" id="preview-page-input" value="1" min="1" max="1" class="w-12 py-1 text-center bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/40">
+              <span>/</span>
+              <span id="preview-page-total">1</span>
+            </div>
+            <button id="btn-next-page" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-30 cursor-pointer" title="Next page" disabled>
+              <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Page label -->
+        <p id="preview-page-label" class="text-center text-sm text-gray-500 dark:text-gray-400 mt-3"></p>
+      </div>
+
+      <!-- Generate button -->
+      <button id="btn-generate" class="mt-8 px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-lg rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed" disabled data-i18n="generate">Generate PDF</button>
+    </div>
+
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

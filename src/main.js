@@ -1,0 +1,533 @@
+import './styles.css';
+import { T, LAYOUTS, FONT_NAMES, DEFAULT_LAYOUT, FIGURINE_FONTS } from './config.js';
+import { parseFile } from './pgn-parser.js';
+
+// ─── State ─────────────────────────────────────────────────────────────
+const state = {
+  lang: localStorage.getItem('diagpdf-lang') || 'en',
+  theme: localStorage.getItem('diagpdf-theme') || 'dark',
+  positions: [],
+  filename: '',
+  chapters: [],
+  previewPage: 0,
+};
+
+// ─── i18n ──────────────────────────────────────────────────────────────
+function t(key) {
+  const langDict = T[state.lang] || T['en'];
+  return langDict[key] || T['en'][key] || key;
+}
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const text = t(key);
+    if (el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'radio') {
+      el.placeholder = text;
+    } else {
+      el.textContent = text;
+    }
+  });
+
+  // Default localized values for Cover inputs if unmodified
+  const todayStr = new Date().toLocaleDateString(state.lang === 'ru' ? 'ru-RU' : 'en-US');
+  const coverDateInput = document.getElementById('opt-cover-date');
+  if (coverDateInput) {
+    coverDateInput.value = todayStr;
+  }
+
+  const coverTitleInput = document.getElementById('opt-cover-title');
+  if (coverTitleInput && (!coverTitleInput.value || coverTitleInput.value === 'Chess Puzzles' || coverTitleInput.value === 'Шахматные задачи')) {
+    coverTitleInput.value = t('cover_default_title');
+  }
+
+  const coverSubtitleInput = document.getElementById('opt-cover-subtitle');
+  if (coverSubtitleInput && (!coverSubtitleInput.value || coverSubtitleInput.value === 'Mate in 1' || coverSubtitleInput.value === 'Мат в 1 ход')) {
+    coverSubtitleInput.value = t('cover_default_subtitle');
+  }
+
+  const coverAuthorInput = document.getElementById('opt-cover-author');
+  if (coverAuthorInput && (!coverAuthorInput.value || coverAuthorInput.value === 'Ivan Ivanov' || coverAuthorInput.value === 'Иванов Иванов')) {
+    coverAuthorInput.value = t('cover_default_author');
+  }
+
+  // Default localized values for TOC and Answers inputs if unmodified
+  const tocInput = document.getElementById('opt-toc-title');
+  if (tocInput && (!tocInput.value || tocInput.value === 'Contents' || tocInput.value === 'Содержание' || tocInput.value === 'Оглавление')) {
+    tocInput.value = t('contents');
+  }
+
+  const answersInput = document.getElementById('opt-answers-title');
+  if (answersInput && (!answersInput.value || answersInput.value === 'Solutions' || answersInput.value === 'Решения')) {
+    answersInput.value = t('solutions');
+  }
+
+  // Update layout select labels
+  const layoutSelect = document.getElementById('opt-layout');
+  if (layoutSelect) {
+    const idx = state.lang === 'en' ? 0 : 1;
+    layoutSelect.innerHTML = LAYOUTS.map((l, i) =>
+      `<option value="${i}" ${i === DEFAULT_LAYOUT ? 'selected' : ''}>${l[idx]}</option>`
+    ).join('');
+  }
+
+  // Update lang button text
+  const langBtn = document.getElementById('btn-lang');
+  if (langBtn) langBtn.textContent = t('lang_btn');
+}
+
+// ─── Theme ─────────────────────────────────────────────────────────────
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', state.theme === 'dark');
+}
+
+// ─── File handling ─────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  state.filename = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.positions = parseFile(e.target.result, file.name);
+    // Reset chapters when loading new file with single full range chapter if needed
+    state.chapters = [];
+    updateFileStatus();
+    updateGenerateButton();
+    refreshPreview();
+  };
+  reader.readAsText(file);
+}
+
+function updateFileStatus() {
+  const el = document.getElementById('file-status');
+  if (!el) return;
+  if (state.positions.length > 0) {
+    const tmpl = t('positions_loaded');
+    el.textContent = `${state.filename} — ${tmpl.replace('{n}', state.positions.length)}`;
+    el.classList.remove('text-gray-500', 'dark:text-gray-400');
+    el.classList.add('text-green-600', 'dark:text-green-400');
+  } else {
+    el.textContent = t('no_file');
+    el.classList.remove('text-green-600', 'dark:text-green-400');
+    el.classList.add('text-gray-500', 'dark:text-gray-400');
+  }
+}
+
+function updateGenerateButton() {
+  const btn = document.getElementById('btn-generate');
+  if (btn) btn.disabled = state.positions.length === 0;
+}
+
+// ─── Chapters ──────────────────────────────────────────────────────────
+function addChapter() {
+  const total = state.positions.length || 100;
+  let from = 1;
+  if (state.chapters.length > 0) {
+    const lastTo = state.chapters[state.chapters.length - 1].to;
+    from = Math.min(lastTo + 1, total);
+  }
+  const to = total;
+  const id = Date.now();
+  const chapterNum = state.chapters.length + 1;
+  const defaultName = `${t('chapter_prefix')} ${chapterNum}`;
+  state.chapters.push({ id, name: defaultName, from, to });
+  renderChapters();
+  refreshPreview();
+}
+
+function removeChapter(id) {
+  state.chapters = state.chapters.filter(c => c.id !== id);
+  renderChapters();
+  refreshPreview();
+}
+
+function renderChapters() {
+  const list = document.getElementById('chapters-list');
+  const addBtn = document.getElementById('btn-add-chapter');
+  const total = state.positions.length || 100;
+
+  if (addBtn) {
+    addBtn.disabled = false;
+  }
+
+  if (!list) return;
+  list.innerHTML = state.chapters.map(ch => `
+    <div class="chapter-item flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs" data-id="${ch.id}">
+      <input type="text" value="${ch.name}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
+      <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
+        <input type="number" value="${ch.from}" min="1" max="${total}" class="chapter-from w-12 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_from')}">
+        <span class="text-gray-400 font-bold text-xs select-none">–</span>
+        <input type="number" value="${ch.to}" min="1" max="${total}" class="chapter-to w-12 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_to')}">
+      </div>
+      <button class="btn-remove shrink-0 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer" data-remove="${ch.id}" title="Remove chapter">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  `).join('');
+
+  // Bind chapter input events
+  list.querySelectorAll('.chapter-item').forEach((item, idx) => {
+    const id = parseInt(item.dataset.id);
+    const ch = state.chapters[id ? state.chapters.findIndex(c => c.id === id) : idx];
+    const chIndex = state.chapters.findIndex(c => c.id === id);
+    if (!ch) return;
+
+    item.querySelector('.chapter-name').addEventListener('input', e => { 
+      ch.name = e.target.value; 
+      refreshPreview();
+    });
+
+    item.querySelector('.chapter-from').addEventListener('change', e => { 
+      let newFrom = parseInt(e.target.value) || 1;
+      const minAllowed = chIndex > 0 ? state.chapters[chIndex - 1].to + 1 : 1;
+      if (newFrom < minAllowed) newFrom = minAllowed;
+      if (newFrom > total) newFrom = total;
+      ch.from = newFrom;
+      if (ch.to < ch.from) ch.to = ch.from;
+      renderChapters();
+      refreshPreview();
+    });
+
+    item.querySelector('.chapter-to').addEventListener('change', e => { 
+      let newTo = parseInt(e.target.value) || ch.from;
+      if (newTo < ch.from) newTo = ch.from;
+      if (newTo > total) newTo = total;
+      ch.to = newTo;
+
+      // Automatically adjust subsequent chapters if their 'from' is <= newTo
+      for (let i = chIndex + 1; i < state.chapters.length; i++) {
+        const nextCh = state.chapters[i];
+        const prevTo = state.chapters[i - 1].to;
+        if (nextCh.from <= prevTo) {
+          nextCh.from = prevTo + 1;
+          if (nextCh.to < nextCh.from) {
+            nextCh.to = Math.min(nextCh.from, total);
+          }
+        }
+      }
+
+      renderChapters();
+      refreshPreview();
+    });
+
+    item.querySelector('[data-remove]').addEventListener('click', () => removeChapter(id));
+  });
+}
+
+// ─── Toggle sections ───────────────────────────────────────────────────
+function setupToggles() {
+  const toggles = [
+    ['opt-cover-enable', 'cover-fields'],
+    ['opt-toc-enable', 'toc-fields'],
+    ['opt-answers-enable', 'answers-fields'],
+  ];
+  toggles.forEach(([checkboxId, fieldsId]) => {
+    const cb = document.getElementById(checkboxId);
+    const fields = document.getElementById(fieldsId);
+    if (cb && fields) {
+      cb.addEventListener('change', () => {
+        fields.classList.toggle('hidden', !cb.checked);
+        const card = cb.closest('.card');
+        if (card && cb.checked) {
+          card.classList.remove('collapsed');
+        }
+      });
+    }
+  });
+
+  // Accordion card header toggle handlers
+  document.querySelectorAll('.card-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.toggle')) return;
+      const card = header.closest('.card');
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
+    });
+  });
+
+  // Title custom input enable/disable based on select
+  const titleModeSelect = document.getElementById('opt-title-mode');
+  const customInput = document.getElementById('opt-title-custom');
+  if (titleModeSelect && customInput) {
+    titleModeSelect.addEventListener('change', () => {
+      customInput.classList.toggle('hidden', titleModeSelect.value !== 'custom');
+    });
+  }
+}
+
+// ─── Preview ───────────────────────────────────────────────────────────
+let pdfTotalPages = 1;
+let refreshTimer = null;
+
+function refreshPreview() {
+  if (state.positions.length === 0) return;
+  
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    const canvas = document.getElementById('preview-canvas');
+    if (!canvas) return;
+
+    try {
+      const { generatePdfBlob } = await import('./pdf-generator.js');
+      const { renderPdfPreview } = await import('./pdf-preview.js');
+      const options = getPdfOptions();
+      const blob = await generatePdfBlob(state.positions, options);
+
+      const result = await renderPdfPreview(blob, state.previewPage, canvas);
+      if (result && result.totalPages) {
+        pdfTotalPages = result.totalPages;
+        updatePreviewDots();
+      }
+    } catch (e) {
+      console.error('Preview render error:', e);
+    }
+  }, 500);
+}
+
+function updatePreviewDots() {
+  const pageInput = document.getElementById('preview-page-input');
+  const pageTotal = document.getElementById('preview-page-total');
+  
+  if (pageInput) {
+    pageInput.value = state.previewPage + 1;
+    pageInput.max = pdfTotalPages;
+  }
+  if (pageTotal) {
+    pageTotal.textContent = pdfTotalPages;
+  }
+
+  const prevBtn = document.getElementById('btn-prev-page');
+  const nextBtn = document.getElementById('btn-next-page');
+  if (prevBtn) prevBtn.disabled = state.previewPage <= 0;
+  if (nextBtn) nextBtn.disabled = state.previewPage >= pdfTotalPages - 1;
+}
+
+function getPdfOptions() {
+  return {
+    layoutIdx: parseInt(document.getElementById('opt-layout')?.value || '2'),
+    boardFont: document.getElementById('opt-font')?.value || 'AlphaDG',
+    showCoords: document.getElementById('opt-coords')?.checked ?? true,
+    symbol: document.getElementById('opt-symbol')?.value || 'square',
+    orientation: document.getElementById('opt-orient')?.value || 'auto',
+    titleMode: document.getElementById('opt-title-mode')?.value || 'number',
+    customTitle: document.getElementById('opt-title-custom')?.value || '',
+    cover: {
+      enable: document.getElementById('opt-cover-enable')?.checked || false,
+      title: document.getElementById('opt-cover-title')?.value || t('cover_default_title'),
+      subtitle: document.getElementById('opt-cover-subtitle')?.value || t('cover_default_subtitle'),
+      author: document.getElementById('opt-cover-author')?.value || t('cover_default_author'),
+      date: document.getElementById('opt-cover-date')?.value || new Date().toLocaleDateString(state.lang === 'ru' ? 'ru-RU' : 'en-US')
+    },
+    toc: {
+      enable: document.getElementById('opt-toc-enable')?.checked || false,
+      title: document.getElementById('opt-toc-title')?.value || t('contents')
+    },
+    chapters: state.chapters,
+    diagramsTitle: t('diagrams_toc'),
+    notationLinesCount: parseInt(document.getElementById('opt-lines-count')?.value || '0'),
+    notationLinesMode: document.getElementById('opt-lines-mode')?.value || 'plain',
+    lichessLinks: document.getElementById('opt-lichess')?.checked || false,
+    answers: {
+      enable: document.getElementById('opt-answers-enable')?.checked || false,
+      title: document.getElementById('opt-answers-title')?.value || t('solutions'),
+      cols: document.getElementById('opt-answers-cols')?.value || '1',
+      figurineFont: document.getElementById('opt-figurine-font')?.value || 'AlphaDG'
+    }
+  };
+}
+
+const SETTINGS_KEY = 'diagpdf-settings';
+
+function saveSettings() {
+  try {
+    const opts = getPdfOptions();
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(opts));
+  } catch (e) {
+    console.error('Error saving settings to localStorage:', e);
+  }
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const opts = JSON.parse(raw);
+
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined) el.value = val;
+    };
+    const setCheck = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined) el.checked = !!val;
+    };
+
+    setVal('opt-layout', opts.layoutIdx);
+    setVal('opt-font', opts.boardFont);
+    setCheck('opt-coords', opts.showCoords);
+    setVal('opt-symbol', opts.symbol);
+    setVal('opt-orient', opts.orientation);
+    setVal('opt-title-mode', opts.titleMode);
+    setVal('opt-title-custom', opts.customTitle);
+
+    if (opts.cover) {
+      setCheck('opt-cover-enable', opts.cover.enable);
+      setVal('opt-cover-title', opts.cover.title);
+      setVal('opt-cover-subtitle', opts.cover.subtitle);
+      setVal('opt-cover-author', opts.cover.author);
+      setVal('opt-cover-date', opts.cover.date);
+      if (opts.cover.enable) {
+        document.getElementById('cover-fields')?.classList.remove('hidden');
+      }
+    }
+
+    if (opts.toc) {
+      setCheck('opt-toc-enable', opts.toc.enable);
+      const tocTitleVal = (opts.toc.title === 'Содержание') ? t('contents') : opts.toc.title;
+      setVal('opt-toc-title', tocTitleVal);
+      if (opts.toc.enable) {
+        document.getElementById('toc-fields')?.classList.remove('hidden');
+      }
+    }
+
+    setVal('opt-lines-count', opts.notationLinesCount);
+    setVal('opt-lines-mode', opts.notationLinesMode);
+    setCheck('opt-lichess', opts.lichessLinks);
+
+    if (opts.answers) {
+      setCheck('opt-answers-enable', opts.answers.enable);
+      setVal('opt-answers-title', opts.answers.title);
+      setVal('opt-answers-cols', opts.answers.cols);
+      setVal('opt-figurine-font', opts.answers.figurineFont);
+      if (opts.answers.enable) {
+        document.getElementById('answers-fields')?.classList.remove('hidden');
+      }
+    }
+
+    // Toggle custom title visibility
+    const customInput = document.getElementById('opt-title-custom');
+    if (customInput) {
+      customInput.classList.toggle('hidden', opts.titleMode !== 'custom');
+    }
+  } catch (e) {
+    console.error('Error loading settings from localStorage:', e);
+  }
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────
+function init() {
+  applyTheme();
+  applyLang();
+  loadSettings();
+  setupToggles();
+  updateGenerateButton();
+
+  // Theme toggle
+  document.getElementById('btn-theme')?.addEventListener('click', () => {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('diagpdf-theme', state.theme);
+    applyTheme();
+  });
+
+  // Language toggle
+  document.getElementById('btn-lang')?.addEventListener('click', () => {
+    state.lang = state.lang === 'en' ? 'ru' : 'en';
+    localStorage.setItem('diagpdf-lang', state.lang);
+    applyLang();
+  });
+
+  // File input
+  const fileInput = document.getElementById('file-input');
+  const dropZone = document.getElementById('drop-zone');
+
+  dropZone?.addEventListener('click', () => fileInput?.click());
+  fileInput?.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+  // Drag and drop
+  dropZone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone?.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+  dropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer?.files[0];
+    if (file) handleFile(file);
+  });
+
+  // Add chapter button
+  document.getElementById('btn-add-chapter')?.addEventListener('click', () => addChapter());
+
+  // Generate button
+  document.getElementById('btn-generate')?.addEventListener('click', async () => {
+    if (state.positions.length === 0) return;
+    const { generatePdfBlob } = await import('./pdf-generator.js');
+    const blob = await generatePdfBlob(state.positions, getPdfOptions());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.filename.replace(/\.[^/.]+$/, "") + "_diagrams.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btn-prev-page')?.addEventListener('click', () => {
+    if (state.previewPage > 0) {
+      state.previewPage--;
+      updatePreviewDots();
+      refreshPreview();
+    }
+  });
+
+  document.getElementById('btn-next-page')?.addEventListener('click', () => {
+    if (state.previewPage < pdfTotalPages - 1) {
+      state.previewPage++;
+      updatePreviewDots();
+      refreshPreview();
+    }
+  });
+
+  const pageInputEl = document.getElementById('preview-page-input');
+  if (pageInputEl) {
+    const handlePageJump = () => {
+      let requested = parseInt(pageInputEl.value) || 1;
+      if (requested < 1) requested = 1;
+      if (requested > pdfTotalPages) requested = pdfTotalPages;
+      state.previewPage = requested - 1;
+      updatePreviewDots();
+      refreshPreview();
+    };
+    pageInputEl.addEventListener('change', handlePageJump);
+    pageInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handlePageJump();
+    });
+  }
+
+  // Live update preview on option changes & save to localStorage
+  const autoUpdateSelectors = [
+    '#opt-layout', '#opt-font', '#opt-coords', '#opt-symbol', '#opt-orient',
+    '#opt-lines-count', '#opt-lines-mode', '#opt-title-mode', '#opt-title-custom',
+    '#opt-cover-enable', '#opt-cover-title', '#opt-cover-subtitle', '#opt-cover-author', '#opt-cover-date',
+    '#opt-toc-enable', '#opt-toc-title', '#opt-answers-enable', '#opt-answers-title',
+    '#opt-answers-cols', '#opt-figurine-font', '#opt-lichess'
+  ];
+
+  autoUpdateSelectors.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) {
+      const handler = () => {
+        saveSettings();
+        refreshPreview();
+      };
+      el.addEventListener('change', handler);
+      if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'number')) {
+        el.addEventListener('input', handler);
+      }
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
