@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { LAYOUTS } from './config.js';
+import { LAYOUTS, FONT_FILES, FIGURINE_FILES } from './config.js';
 import { fenToDiagram, chessStr } from './board-renderer.js';
 
 const fontCache = {};
@@ -67,14 +67,7 @@ export async function generatePdfBlob(positions, options = {}) {
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-  // Dynamically load selected board font
-  const boardFilenameMap = {
-    'AlphaDG': 'AlphaDG.ttf',
-    'LeipzigDG': 'LeipzigDG.ttf',
-    'CondalDG': 'CondalDG.ttf',
-    'KingdomDG': 'KingdomDG.ttf'
-  };
-  const boardFile = boardFilenameMap[boardFont] || 'AlphaDG.ttf';
+  const boardFile = FONT_FILES[boardFont] || 'AlphaDG.ttf';
   const hasCustomFont = await loadFontIntoDoc(doc, boardFile, boardFont);
   const activeFontName = hasCustomFont ? boardFont : 'Courier';
 
@@ -83,14 +76,11 @@ export async function generatePdfBlob(positions, options = {}) {
 
   // Load figurine font if enabled
   let ansFontName = 'Roboto';
-  const figMap = { Zurich: 'ZurichFigurine.TTF', Hastings: 'HastingsFigurine.TTF', Linares: 'LinaresFigurine.TTF' };
-  if (options.answers?.enable && options.answers?.figurineFont) {
+  const figFile = FIGURINE_FILES[options.answers?.figurineFont];
+  if (options.answers?.enable && figFile) {
     const figFont = options.answers.figurineFont;
-    const figFile = figMap[figFont];
-    if (figFile) {
-      const hasFig = await loadFontIntoDoc(doc, figFile, figFont);
-      if (hasFig) ansFontName = figFont;
-    }
+    const hasFig = await loadFontIntoDoc(doc, figFile, figFont);
+    if (hasFig) ansFontName = figFont;
   }
   if (!fontCache['Roboto-Regular.ttf'] && ansFontName === 'Roboto') {
     ansFontName = 'Helvetica'; // fallback

@@ -62,11 +62,14 @@ export const FONT_FILES = {
 export const FONT_NAMES = Object.keys(FONT_FILES);
 
 // Figurine notation fonts
-export const FIGURINE_FONTS = ['Zurich', 'Hastings', 'Linares'];
+export const FIGURINE_FONTS = ['Zurich', 'Hastings', 'Linares', 'Aries', 'Letter', 'Time'];
 export const FIGURINE_FILES = {
   Zurich:   'ZurichFigurine.TTF',
   Hastings: 'HastingsFigurine.TTF',
   Linares:  'LinaresFigurine.TTF',
+  Aries:    'SpArFgRg.ttf',
+  Letter:   'SpLtFgRg.ttf',
+  Time:     'SpTmFgRg.ttf',
 };
 
 // Page geometry (A4, mm)
