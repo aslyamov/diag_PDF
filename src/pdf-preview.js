@@ -16,18 +16,17 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
   if (currentRenderTask) {
     try {
       currentRenderTask.cancel();
-    } catch (e) {
-      // Ignore cancellation exception
-    }
+    } catch (e) {}
+    currentRenderTask = null;
+  }
+
+  if (cachedPdf) {
+    try { cachedPdf.destroy(); } catch (e) {}
+    cachedPdf = null;
   }
 
   const arrayBuffer = await pdfBlob.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-
-  if (cachedPdf) {
-    try { cachedPdf.destroy(); } catch (e) { /* ignore */ }
-  }
-
   cachedPdf = await loadingTask.promise;
 
   const totalPages = cachedPdf.numPages;
@@ -38,6 +37,7 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
 
   const canvas = canvasEl;
   const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
   canvas.height = viewport.height;
   canvas.width = viewport.width;
 

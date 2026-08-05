@@ -15,9 +15,9 @@ async function loadFontIntoDoc(doc, file, fontName) {
         const buffer = await res.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
         }
         b64 = btoa(binary);
         fontCache[file] = b64;

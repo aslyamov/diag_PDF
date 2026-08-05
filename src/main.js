@@ -258,6 +258,14 @@ function renderChapters() {
       refreshPreview();
     });
 
+    item.querySelector('.chapter-from').addEventListener('input', e => {
+      let val = parseInt(e.target.value);
+      if (isNaN(val)) return;
+      ch.from = Math.max(1, Math.min(val, total));
+      if (ch.to < ch.from) ch.to = ch.from;
+      refreshPreview();
+    });
+
     item.querySelector('.chapter-from').addEventListener('change', e => {
       let newFrom = parseInt(e.target.value) || 1;
       const minAllowed = chIndex > 0 ? state.chapters[chIndex - 1].to + 1 : 1;
@@ -266,7 +274,6 @@ function renderChapters() {
       ch.from = newFrom;
       if (ch.to < ch.from) ch.to = ch.from;
 
-      // Adjust subchapters inside this chapter
       if (ch.subchapters && ch.subchapters.length > 0) {
         if (ch.subchapters[0].from < ch.from) ch.subchapters[0].from = ch.from;
         const lastSub = ch.subchapters[ch.subchapters.length - 1];

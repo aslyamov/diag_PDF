@@ -23,7 +23,7 @@ function firstTextComment(movesRaw) {
  */
 export function parsePgn(content) {
   const positions = [];
-  // Split on [Event boundaries
+  // Split on [Event boundaries or start of tags block
   const blocks = content.split(/(?=^\[Event\b)/im);
 
   for (const block of blocks) {
@@ -37,12 +37,15 @@ export function parsePgn(content) {
       tagEnd = Math.max(tagEnd, m.index + m[0].length);
     }
 
-    const fen = tags.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
     // Everything after tags = move text
     let movesRaw = block.slice(tagEnd).trim();
     // Strip result token
     movesRaw = movesRaw.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '').trim();
+
+    // If position has no custom FEN tag and no moves/comments, skip empty/junk block
+    if (!tags.FEN && !movesRaw && Object.keys(tags).length === 0) continue;
+
+    const fen = tags.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
     positions.push({
       fen,
