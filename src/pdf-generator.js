@@ -319,9 +319,8 @@ export async function generatePdfBlob(positions, options = {}) {
     const startY = 90;
     const maxY = pageHeight - 60;
     const colWidth = (pageWidth - marginX * 2 - (ansCols - 1) * 20) / ansCols;
-    const lineHeight = 16;
-    const itemsPerCol = Math.floor((maxY - startY) / lineHeight);
-    const itemsPerPage = itemsPerCol * ansCols;
+    const baseFontSize = 10;
+    const baseLineHeight = 14;
 
     // Filter positions to render in answers up to max chapter position if chapters exist
     let answersPositions = positions;
@@ -332,32 +331,54 @@ export async function generatePdfBlob(positions, options = {}) {
       }
     }
 
+    // We process entries flowingly per column / page
+    let currentCol = 0;
+    let currentY = startY;
+
     answersPositions.forEach((pos, idx) => {
       const solutionText = pos.moves || pos.comment || pos.fen || '—';
-      const pageItemIdx = idx % itemsPerPage;
+      
+      // Calculate how many lines of text this entry will take
+      setTextFont(doc, 'normal');
+      doc.setFontSize(baseFontSize);
+      const prefix = `${idx + 1}. `;
+      const prefixW = doc.getTextWidth(prefix);
 
-      if (idx > 0 && pageItemIdx === 0) {
-        doc.addPage();
-        currentPage++;
-        setTextFont(doc, 'bold');
-        doc.setFontSize(18);
-        doc.text(answersOpt.title || 'Solutions', pageWidth / 2, 60, { align: 'center' });
+      doc.setFont(ansFontName, 'normal');
+      doc.setFontSize(baseFontSize);
+      const textLines = doc.splitTextToSize(solutionText, colWidth - prefixW);
+      const entryHeight = textLines.length * baseLineHeight + 4; // 4pt gap between questions
+
+      // Check if entry fits in current column
+      if (currentY + entryHeight > maxY) {
+        currentCol++;
+        if (currentCol >= ansCols) {
+          // Add new page
+          doc.addPage();
+          currentPage++;
+          setTextFont(doc, 'bold');
+          doc.setFontSize(18);
+          doc.text(answersOpt.title || 'Solutions', pageWidth / 2, 60, { align: 'center' });
+          currentCol = 0;
+        }
+        currentY = startY;
       }
 
-      const colIdx = Math.floor(pageItemIdx / itemsPerCol);
-      const rowIdx = pageItemIdx % itemsPerCol;
+      const ansX = marginX + currentCol * (colWidth + 20);
 
-      const ansX = marginX + colIdx * (colWidth + 20);
-      const ansY = startY + rowIdx * lineHeight;
-
+      // Draw number prefix
       setTextFont(doc, 'normal');
-      doc.setFontSize(10);
-      const prefix = `${idx + 1}. `;
-      doc.text(prefix, ansX, ansY);
+      doc.setFontSize(baseFontSize);
+      doc.text(prefix, ansX, currentY);
 
-      const prefixW = doc.getTextWidth(prefix);
+      // Draw solution text lines
       doc.setFont(ansFontName, 'normal');
-      doc.text(solutionText, ansX + prefixW, ansY, { maxWidth: colWidth - prefixW });
+      doc.setFontSize(baseFontSize);
+      textLines.forEach((line, lIdx) => {
+        doc.text(line, ansX + prefixW, currentY + lIdx * baseLineHeight);
+      });
+
+      currentY += entryHeight;
     });
   }
 
