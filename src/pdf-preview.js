@@ -23,6 +23,11 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
 
   const arrayBuffer = await pdfBlob.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+
+  if (cachedPdf) {
+    try { cachedPdf.destroy(); } catch (e) { /* ignore */ }
+  }
+
   cachedPdf = await loadingTask.promise;
 
   const totalPages = cachedPdf.numPages;
@@ -50,6 +55,6 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
     if (e?.name !== 'RenderingCancelledException') {
       console.error(e);
     }
-    return { totalPages };
+    return null;
   }
 }

@@ -177,11 +177,17 @@ export async function generatePdfBlob(positions, options = {}) {
   };
 
   let globalPosIdx = 0;
+  const renderedPositions = [];
 
   for (let chIdx = 0; chIdx < chaptersToRender.length; chIdx++) {
     const ch = chaptersToRender[chIdx];
     const chPositions = positions.slice(ch.from - 1, ch.to);
     
+    if (chPositions.length === 0) {
+      tocEntries.push(null);
+      continue;
+    }
+
     if (chIdx > 0) {
       drawFooter();
       doc.addPage();
@@ -292,6 +298,7 @@ export async function generatePdfBlob(positions, options = {}) {
         }
       }
       
+      renderedPositions.push({ globalIdx: globalPosIdx, pos });
       globalPosIdx++;
     }
     
@@ -322,26 +329,20 @@ export async function generatePdfBlob(positions, options = {}) {
     const baseFontSize = 10;
     const baseLineHeight = 14;
 
-    // Filter positions to render in answers up to max chapter position if chapters exist
-    let answersPositions = positions;
-    if (chapters && chapters.length > 0) {
-      const maxTo = Math.max(...chapters.map(c => parseInt(c.to) || 0));
-      if (maxTo > 0) {
-        answersPositions = positions.slice(0, maxTo);
-      }
-    }
+    let answersPositions = renderedPositions;
 
     // We process entries flowingly per column / page
     let currentCol = 0;
     let currentY = startY;
 
-    answersPositions.forEach((pos, idx) => {
+    answersPositions.forEach((item) => {
+      const { globalIdx, pos } = item;
       const solutionText = pos.moves || pos.comment || pos.fen || '—';
       
       // Calculate how many lines of text this entry will take
       setTextFont(doc, 'normal');
       doc.setFontSize(baseFontSize);
-      const prefix = `${idx + 1}. `;
+      const prefix = `${globalIdx + 1}. `;
       const prefixW = doc.getTextWidth(prefix);
 
       doc.setFont(ansFontName, 'normal');
@@ -350,10 +351,10 @@ export async function generatePdfBlob(positions, options = {}) {
       const entryHeight = textLines.length * baseLineHeight + 4; // 4pt gap between questions
 
       // Check if entry fits in current column
-      if (currentY + entryHeight > maxY) {
+      if (currentY + entryHeight > maxY && currentY > startY) {
         currentCol++;
         if (currentCol >= ansCols) {
-          // Add new page
+          drawFooter();
           doc.addPage();
           currentPage++;
           setTextFont(doc, 'bold');
@@ -379,7 +380,22 @@ export async function generatePdfBlob(positions, options = {}) {
       });
 
       currentY += entryHeight;
+      if (currentY > maxY) {
+        currentCol++;
+        if (currentCol >= ansCols) {
+          drawFooter();
+          doc.addPage();
+          currentPage++;
+          setTextFont(doc, 'bold');
+          doc.setFontSize(18);
+          doc.text(answersOpt.title || 'Solutions', pageWidth / 2, 60, { align: 'center' });
+          currentCol = 0;
+        }
+        currentY = startY;
+      }
     });
+
+    drawFooter();
   }
 
   // Draw TOC now that we know the pages
@@ -396,6 +412,7 @@ export async function generatePdfBlob(positions, options = {}) {
     const tocList = [];
     if (chapters && chapters.length > 0) {
       chapters.forEach((ch, idx) => {
+        if (!tocEntries[idx]) return;
         tocList.push({
           name: ch.name || `Chapter ${idx + 1}`,
           range: `(${ch.from}–${ch.to})`,
@@ -419,6 +436,12 @@ export async function generatePdfBlob(positions, options = {}) {
     }
 
     tocList.forEach((item, idx) => {
+      if (y + 24 > pageHeight - 60) {
+        doc.addPage();
+        currentPage++;
+        y = 60;
+      }
+
       const label = item.range ? `${idx + 1}. ${item.name} ${item.range}` : `${idx + 1}. ${item.name}`;
       doc.text(label, 50, y);
       

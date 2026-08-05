@@ -26,7 +26,7 @@ export const BDR = {
   // No-coords frame
   NW_NC: '!', NE_NC: '#',
   SW_NC: '&', SE_NC: '(',
-  W_NC: '$',
+  W_NC: '$', E_NC: '%',
 };
 
 // Coordinate characters (Unicode PUA in the chess font)

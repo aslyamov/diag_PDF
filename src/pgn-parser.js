@@ -7,6 +7,7 @@ const TAG_RE = /\[(\w+)\s+"([^"]*)"\]/g;
  * Strips [%...] annotations, returns first {...} content.
  */
 function firstTextComment(movesRaw) {
+  if (!movesRaw || typeof movesRaw !== 'string') return '';
   const matches = movesRaw.matchAll(/\{([^}]*)\}/g);
   for (const m of matches) {
     const text = m[1].replace(/\[%[^\]]+\]/g, '').trim();
@@ -36,8 +37,7 @@ export function parsePgn(content) {
       tagEnd = Math.max(tagEnd, m.index + m[0].length);
     }
 
-    const fen = tags.FEN;
-    if (!fen) continue; // skip blocks without FEN
+    const fen = tags.FEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
     // Everything after tags = move text
     let movesRaw = block.slice(tagEnd).trim();

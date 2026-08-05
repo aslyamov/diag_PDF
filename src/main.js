@@ -65,10 +65,12 @@ function applyLang() {
   // Update layout select labels
   const layoutSelect = document.getElementById('opt-layout');
   if (layoutSelect) {
+    const savedIndex = layoutSelect.selectedIndex;
     const idx = state.lang === 'en' ? 0 : 1;
     layoutSelect.innerHTML = LAYOUTS.map((l, i) =>
       `<option value="${i}" ${i === DEFAULT_LAYOUT ? 'selected' : ''}>${l[idx]}</option>`
     ).join('');
+    if (savedIndex >= 0) layoutSelect.selectedIndex = savedIndex;
   }
 
   // Update lang button text
@@ -90,6 +92,10 @@ function handleFile(file) {
     state.positions = parseFile(e.target.result, file.name);
     // Reset chapters when loading new file with single full range chapter if needed
     state.chapters = [];
+    renderChapters();
+    state.previewPage = 0;
+    const pageInput = document.getElementById('preview-page-input');
+    if (pageInput) pageInput.value = 1;
     updateFileStatus();
     updateGenerateButton();
     refreshPreview();
@@ -150,6 +156,28 @@ function renderChapters() {
   }
 
   if (!list) return;
+
+  const activeEl = document.activeElement;
+  let focusId = null;
+  let focusClass = null;
+  let focusSelStart = null;
+  let focusSelEnd = null;
+
+  if (activeEl && list.contains(activeEl)) {
+    const item = activeEl.closest('.chapter-item');
+    if (item) {
+      focusId = item.dataset.id;
+      if (activeEl.classList.contains('chapter-name')) focusClass = 'chapter-name';
+      else if (activeEl.classList.contains('chapter-from')) focusClass = 'chapter-from';
+      else if (activeEl.classList.contains('chapter-to')) focusClass = 'chapter-to';
+
+      try {
+        focusSelStart = activeEl.selectionStart;
+        focusSelEnd = activeEl.selectionEnd;
+      } catch (e) {}
+    }
+  }
+
   list.innerHTML = state.chapters.map(ch => `
     <div class="chapter-item flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs" data-id="${ch.id}">
       <input type="text" value="${ch.name}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
@@ -202,6 +230,7 @@ function renderChapters() {
           if (nextCh.to < nextCh.from) {
             nextCh.to = Math.min(nextCh.from, total);
           }
+          if (nextCh.to < nextCh.from) nextCh.to = nextCh.from;
         }
       }
 
@@ -211,6 +240,21 @@ function renderChapters() {
 
     item.querySelector('[data-remove]').addEventListener('click', () => removeChapter(id));
   });
+
+  if (focusId && focusClass) {
+    const item = list.querySelector(`.chapter-item[data-id="${focusId}"]`);
+    if (item) {
+      const el = item.querySelector(`.${focusClass}`);
+      if (el) {
+        el.focus();
+        try {
+          if (focusSelStart !== null) {
+            el.setSelectionRange(focusSelStart, focusSelEnd);
+          }
+        } catch (e) {}
+      }
+    }
+  }
 }
 
 // ─── Toggle sections ───────────────────────────────────────────────────
@@ -464,14 +508,23 @@ function init() {
   // Generate button
   document.getElementById('btn-generate')?.addEventListener('click', async () => {
     if (state.positions.length === 0) return;
-    const { generatePdfBlob } = await import('./pdf-generator.js');
-    const blob = await generatePdfBlob(state.positions, getPdfOptions());
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = state.filename.replace(/\.[^/.]+$/, "") + "_diagrams.pdf";
-    a.click();
-    URL.revokeObjectURL(url);
+    const btn = document.getElementById('btn-generate');
+    try {
+      if (btn) btn.disabled = true;
+      const { generatePdfBlob } = await import('./pdf-generator.js');
+      const blob = await generatePdfBlob(state.positions, getPdfOptions());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = state.filename.replace(/\.[^/.]+$/, "") + "_diagrams.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      alert('Error generating PDF.');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
 
   document.getElementById('btn-prev-page')?.addEventListener('click', () => {

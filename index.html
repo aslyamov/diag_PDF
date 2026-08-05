@@ -45,7 +45,7 @@
         </div>
         <div class="card-body mt-3">
           <div id="drop-zone" class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all group flex items-center justify-center gap-3">
-            <input type="file" id="file-input" accept=".pgn,.fen,.epd" class="hidden">
+            <input type="file" id="file-input" accept=".pgn,.fen,.epd" class="hidden" aria-label="Upload chess file (.pgn, .fen, .epd)">
             <svg class="w-6 h-6 text-gray-400 dark:text-gray-600 group-hover:text-indigo-500 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
             <p class="text-xs text-gray-500 dark:text-gray-400 text-left leading-tight" data-i18n="drop_hint">Drop .pgn / .fen / .epd file here or click to browse</p>
           </div>
@@ -262,7 +262,7 @@
         <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-800 overflow-hidden">
           <!-- Preview pages -->
           <div id="preview-viewport" class="aspect-[210/297] w-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-            <canvas id="preview-canvas" class="max-h-full max-w-full rounded shadow-lg"></canvas>
+            <canvas id="preview-canvas" class="max-h-full max-w-full rounded shadow-lg" aria-label="PDF preview"></canvas>
           </div>
           <!-- Page navigation -->
           <div class="flex items-center justify-center gap-3 py-3 border-t border-gray-200 dark:border-gray-800 text-sm">

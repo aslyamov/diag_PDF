@@ -10,6 +10,9 @@ import { ALPHA_DG, BDR, RANK_CHARS, FILE_CHARS, SYMBOL_CHARS } from './config.js
  *   board[rank][file] — rank: 0=1..7=8, file: 0=a..7=h
  */
 export function parseFen(fenStr) {
+  if (!fenStr || typeof fenStr !== 'string') {
+    return { board: Array.from({ length: 8 }, () => Array(8).fill(null)), side: 'w' };
+  }
   const parts = fenStr.trim().split(/\s+/);
   const boardStr = parts[0];
   const side = (parts[1] || 'w').toLowerCase();
@@ -116,7 +119,7 @@ export function fenToDiagram(fen, opts = {}) {
         const isDark = (fi + ri) % 2 === 0;
         row += pieceChar(piece, isDark);
       }
-      row += (ri === visualBottomRank) ? hgChar : BDR.E;
+      row += (ri === visualBottomRank) ? hgChar : BDR.E_NC;
       lines.push(row);
     }
 
