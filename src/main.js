@@ -124,24 +124,51 @@ function updateGenerateButton() {
 }
 
 // ─── Chapters ──────────────────────────────────────────────────────────
-function addChapter() {
+function addChapter(parentId = null) {
   const total = state.positions.length || 100;
-  let from = 1;
-  if (state.chapters.length > 0) {
-    const lastTo = state.chapters[state.chapters.length - 1].to;
-    from = Math.min(lastTo + 1, total);
-  }
-  const to = total;
   const id = Date.now();
-  const chapterNum = state.chapters.length + 1;
-  const defaultName = `${t('chapter_prefix')} ${chapterNum}`;
-  state.chapters.push({ id, name: defaultName, from, to });
+
+  if (parentId !== null) {
+    // Add subchapter inside parent chapter
+    const parent = state.chapters.find(c => c.id === parentId);
+    if (!parent) return;
+    if (!parent.subchapters) parent.subchapters = [];
+
+    let from = parent.from;
+    if (parent.subchapters.length > 0) {
+      const lastTo = parent.subchapters[parent.subchapters.length - 1].to;
+      from = Math.min(lastTo + 1, parent.to);
+    }
+    const to = parent.to;
+    const subNum = `${parent.subchapters.length + 1}`;
+    const defaultName = `${t('subchapter_name')} ${subNum}`;
+    parent.subchapters.push({ id, name: defaultName, from, to });
+  } else {
+    // Add top-level chapter
+    let from = 1;
+    if (state.chapters.length > 0) {
+      const lastTo = state.chapters[state.chapters.length - 1].to;
+      from = Math.min(lastTo + 1, total);
+    }
+    const to = total;
+    const chapterNum = state.chapters.length + 1;
+    const defaultName = `${t('chapter_prefix')} ${chapterNum}`;
+    state.chapters.push({ id, name: defaultName, from, to, subchapters: [] });
+  }
+
   renderChapters();
   refreshPreview();
 }
 
-function removeChapter(id) {
-  state.chapters = state.chapters.filter(c => c.id !== id);
+function removeChapter(id, parentId = null) {
+  if (parentId !== null) {
+    const parent = state.chapters.find(c => c.id === parentId);
+    if (parent && parent.subchapters) {
+      parent.subchapters = parent.subchapters.filter(sc => sc.id !== id);
+    }
+  } else {
+    state.chapters = state.chapters.filter(c => c.id !== id);
+  }
   renderChapters();
   refreshPreview();
 }
@@ -151,10 +178,7 @@ function renderChapters() {
   const addBtn = document.getElementById('btn-add-chapter');
   const total = state.positions.length || 100;
 
-  if (addBtn) {
-    addBtn.disabled = false;
-  }
-
+  if (addBtn) addBtn.disabled = false;
   if (!list) return;
 
   const activeEl = document.activeElement;
@@ -164,7 +188,7 @@ function renderChapters() {
   let focusSelEnd = null;
 
   if (activeEl && list.contains(activeEl)) {
-    const item = activeEl.closest('.chapter-item');
+    const item = activeEl.closest('[data-id]');
     if (item) {
       focusId = item.dataset.id;
       if (activeEl.classList.contains('chapter-name')) focusClass = 'chapter-name';
@@ -178,67 +202,157 @@ function renderChapters() {
     }
   }
 
-  list.innerHTML = state.chapters.map(ch => `
-    <div class="chapter-item flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs" data-id="${ch.id}">
-      <input type="text" value="${ch.name}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
-      <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
-        <input type="number" value="${ch.from}" min="1" max="${total}" class="chapter-from w-12 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_from')}">
-        <span class="text-gray-400 font-bold text-xs select-none">–</span>
-        <input type="number" value="${ch.to}" min="1" max="${total}" class="chapter-to w-12 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_to')}">
-      </div>
-      <button class="btn-remove shrink-0 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer" data-remove="${ch.id}" title="Remove chapter">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-    </div>
-  `).join('');
+  let html = '';
+  state.chapters.forEach((ch, chIdx) => {
+    html += `
+      <div class="chapter-card p-2 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
+        <div class="chapter-item flex items-center gap-2" data-id="${ch.id}">
+          <span class="text-xs font-bold text-gray-500 w-5 text-center select-none">${chIdx + 1}.</span>
+          <input type="text" value="${ch.name}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
+          <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
+            <input type="number" value="${ch.from}" min="1" max="${total}" class="chapter-from w-11 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_from')}">
+            <span class="text-gray-400 font-bold text-xs select-none">–</span>
+            <input type="number" value="${ch.to}" min="1" max="${total}" class="chapter-to w-11 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_to')}">
+          </div>
+          <button class="btn-add-sub shrink-0 px-2 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors cursor-pointer" data-add-sub="${ch.id}" title="${t('add_subchapter')}">
+            ${t('add_subchapter')}
+          </button>
+          <button class="btn-remove shrink-0 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer" data-remove="${ch.id}" title="Remove chapter">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>`;
 
-  // Bind chapter input events
-  list.querySelectorAll('.chapter-item').forEach((item, idx) => {
+    if (ch.subchapters && ch.subchapters.length > 0) {
+      html += `<div class="subchapters-list pl-6 space-y-1.5 border-l-2 border-indigo-200 dark:border-indigo-800 ml-2">`;
+      ch.subchapters.forEach((sc, scIdx) => {
+        html += `
+          <div class="subchapter-item flex items-center gap-2" data-id="${sc.id}" data-parent-id="${ch.id}">
+            <span class="text-xs font-medium text-gray-400 w-6 text-center select-none">${chIdx + 1}.${scIdx + 1}</span>
+            <input type="text" value="${sc.name}" placeholder="${t('subchapter_name')}" class="chapter-name input flex-1 text-xs px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md">
+            <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
+              <input type="number" value="${sc.from}" min="${ch.from}" max="${ch.to}" class="chapter-from w-10 text-center text-xs font-medium bg-transparent outline-none">
+              <span class="text-gray-400 text-xs select-none">–</span>
+              <input type="number" value="${sc.to}" min="${ch.from}" max="${ch.to}" class="chapter-to w-10 text-center text-xs font-medium bg-transparent outline-none">
+            </div>
+            <button class="btn-remove shrink-0 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md cursor-pointer" data-remove-sub="${sc.id}" data-parent-id="${ch.id}">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+
+  list.innerHTML = html;
+
+  // Bind main chapter events
+  list.querySelectorAll('.chapter-item').forEach((item) => {
     const id = parseInt(item.dataset.id);
-    const ch = state.chapters[id ? state.chapters.findIndex(c => c.id === id) : idx];
     const chIndex = state.chapters.findIndex(c => c.id === id);
+    const ch = state.chapters[chIndex];
     if (!ch) return;
 
-    item.querySelector('.chapter-name').addEventListener('input', e => { 
-      ch.name = e.target.value; 
+    item.querySelector('.chapter-name').addEventListener('input', e => {
+      ch.name = e.target.value;
       refreshPreview();
     });
 
-    item.querySelector('.chapter-from').addEventListener('change', e => { 
+    item.querySelector('.chapter-from').addEventListener('change', e => {
       let newFrom = parseInt(e.target.value) || 1;
       const minAllowed = chIndex > 0 ? state.chapters[chIndex - 1].to + 1 : 1;
       if (newFrom < minAllowed) newFrom = minAllowed;
       if (newFrom > total) newFrom = total;
       ch.from = newFrom;
       if (ch.to < ch.from) ch.to = ch.from;
-      renderChapters();
-      refreshPreview();
-    });
 
-    item.querySelector('.chapter-to').addEventListener('change', e => { 
-      let newTo = parseInt(e.target.value) || ch.from;
-      if (newTo < ch.from) newTo = ch.from;
-      if (newTo > total) newTo = total;
-      ch.to = newTo;
-
-      // Automatically adjust subsequent chapters if their 'from' is <= newTo
-      for (let i = chIndex + 1; i < state.chapters.length; i++) {
-        const nextCh = state.chapters[i];
-        const prevTo = state.chapters[i - 1].to;
-        if (nextCh.from <= prevTo) {
-          nextCh.from = prevTo + 1;
-          if (nextCh.to < nextCh.from) {
-            nextCh.to = Math.min(nextCh.from, total);
-          }
-          if (nextCh.to < nextCh.from) nextCh.to = nextCh.from;
-        }
+      // Adjust subchapters inside this chapter
+      if (ch.subchapters && ch.subchapters.length > 0) {
+        if (ch.subchapters[0].from < ch.from) ch.subchapters[0].from = ch.from;
+        const lastSub = ch.subchapters[ch.subchapters.length - 1];
+        lastSub.to = ch.to;
       }
 
       renderChapters();
       refreshPreview();
     });
 
+    item.querySelector('.chapter-to').addEventListener('change', e => {
+      let newTo = parseInt(e.target.value) || ch.from;
+      if (newTo < ch.from) newTo = ch.from;
+      if (newTo > total) newTo = total;
+      ch.to = newTo;
+
+      // Auto-pull last subchapter to match new parent chapter 'to'
+      if (ch.subchapters && ch.subchapters.length > 0) {
+        const lastSub = ch.subchapters[ch.subchapters.length - 1];
+        lastSub.to = ch.to;
+        if (lastSub.from > lastSub.to) lastSub.from = lastSub.to;
+      }
+
+      for (let i = chIndex + 1; i < state.chapters.length; i++) {
+        const nextCh = state.chapters[i];
+        const prevTo = state.chapters[i - 1].to;
+        if (nextCh.from <= prevTo) {
+          nextCh.from = prevTo + 1;
+          if (nextCh.to < nextCh.from) nextCh.to = Math.min(nextCh.from, total);
+          if (nextCh.to < nextCh.from) nextCh.to = nextCh.from;
+        }
+      }
+      renderChapters();
+      refreshPreview();
+    });
+
+    item.querySelector('[data-add-sub]').addEventListener('click', () => addChapter(id));
     item.querySelector('[data-remove]').addEventListener('click', () => removeChapter(id));
+  });
+
+  // Bind subchapter events
+  list.querySelectorAll('.subchapter-item').forEach((item) => {
+    const scId = parseInt(item.dataset.id);
+    const parentId = parseInt(item.dataset.parentId);
+    const parent = state.chapters.find(c => c.id === parentId);
+    if (!parent || !parent.subchapters) return;
+    const scIndex = parent.subchapters.findIndex(s => s.id === scId);
+    const sc = parent.subchapters[scIndex];
+    if (!sc) return;
+
+    item.querySelector('.chapter-name').addEventListener('input', e => {
+      sc.name = e.target.value;
+      refreshPreview();
+    });
+
+    item.querySelector('.chapter-from').addEventListener('change', e => {
+      let newFrom = parseInt(e.target.value) || parent.from;
+      const minAllowed = scIndex > 0 ? parent.subchapters[scIndex - 1].to + 1 : parent.from;
+      if (newFrom < minAllowed) newFrom = minAllowed;
+      if (newFrom > parent.to) newFrom = parent.to;
+      sc.from = newFrom;
+      if (sc.to < sc.from) sc.to = sc.from;
+      renderChapters();
+      refreshPreview();
+    });
+
+    item.querySelector('.chapter-to').addEventListener('change', e => {
+      let newTo = parseInt(e.target.value) || sc.from;
+      if (newTo < sc.from) newTo = sc.from;
+      if (newTo > parent.to) newTo = parent.to;
+      sc.to = newTo;
+
+      for (let i = scIndex + 1; i < parent.subchapters.length; i++) {
+        const nextSc = parent.subchapters[i];
+        const prevTo = parent.subchapters[i - 1].to;
+        if (nextSc.from <= prevTo) {
+          nextSc.from = prevTo + 1;
+          if (nextSc.to < nextSc.from) nextSc.to = Math.min(nextSc.from, parent.to);
+          if (nextSc.to < nextSc.from) nextSc.to = nextSc.from;
+        }
+      }
+      renderChapters();
+      refreshPreview();
+    });
+
+    item.querySelector('[data-remove-sub]').addEventListener('click', () => removeChapter(scId, parentId));
   });
 
   if (focusId && focusClass) {
@@ -357,10 +471,10 @@ function getPdfOptions() {
     customTitle: document.getElementById('opt-title-custom')?.value || '',
     cover: {
       enable: document.getElementById('opt-cover-enable')?.checked || false,
-      title: document.getElementById('opt-cover-title')?.value || t('cover_default_title'),
-      subtitle: document.getElementById('opt-cover-subtitle')?.value || t('cover_default_subtitle'),
-      author: document.getElementById('opt-cover-author')?.value || t('cover_default_author'),
-      date: document.getElementById('opt-cover-date')?.value || new Date().toLocaleDateString(state.lang === 'ru' ? 'ru-RU' : 'en-US')
+      title: document.getElementById('opt-cover-title')?.value ?? '',
+      subtitle: document.getElementById('opt-cover-subtitle')?.value ?? '',
+      author: document.getElementById('opt-cover-author')?.value ?? '',
+      date: document.getElementById('opt-cover-date')?.value ?? ''
     },
     toc: {
       enable: document.getElementById('opt-toc-enable')?.checked || false,

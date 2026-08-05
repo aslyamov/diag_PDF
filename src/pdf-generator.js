@@ -97,9 +97,11 @@ export async function generatePdfBlob(positions, options = {}) {
 
   // 1. Cover Page
   if (cover.enable) {
-    setTextFont(doc, 'bold');
-    doc.setFontSize(28);
-    doc.text(cover.title || 'Chess Diagrams', pageWidth / 2, pageHeight / 3, { align: 'center' });
+    if (cover.title) {
+      setTextFont(doc, 'bold');
+      doc.setFontSize(28);
+      doc.text(cover.title, pageWidth / 2, pageHeight / 3, { align: 'center' });
+    }
 
     if (cover.subtitle) {
       setTextFont(doc, 'normal');
@@ -145,11 +147,42 @@ export async function generatePdfBlob(positions, options = {}) {
   const gridW = (pageWidth - marginX * 2) / cols;
   const gridH = (pageHeight - marginY * 2) / rows;
 
+  // Flatten chapters and subchapters into a linear rendering list with hierarchy metadata
   let chaptersToRender = [];
   if (chapters && chapters.length > 0) {
-    chaptersToRender = chapters;
+    chapters.forEach((ch, chIdx) => {
+      if (ch.subchapters && ch.subchapters.length > 0) {
+        // Enforce subchapters stay within parent chapter boundaries
+        ch.subchapters.forEach((sc, scIdx) => {
+          const from = Math.max(ch.from, Math.min(sc.from, ch.to));
+          const to = Math.min(ch.to, Math.max(sc.to, from));
+          chaptersToRender.push({
+            name: `${ch.name} — ${sc.name}`,
+            parentName: ch.name,
+            subName: sc.name,
+            chapterNum: `${chIdx + 1}.${scIdx + 1}`,
+            chIdx,
+            scIdx,
+            from,
+            to,
+            isSubchapter: true
+          });
+        });
+      } else {
+        chaptersToRender.push({
+          name: ch.name,
+          parentName: ch.name,
+          chapterNum: `${chIdx + 1}`,
+          chIdx,
+          scIdx: -1,
+          from: ch.from,
+          to: ch.to,
+          isSubchapter: false
+        });
+      }
+    });
   } else {
-    chaptersToRender = [{ name: '', from: 1, to: positions.length }];
+    chaptersToRender = [{ name: '', parentName: '', chapterNum: '1', chIdx: 0, scIdx: -1, from: 1, to: positions.length, isSubchapter: false }];
   }
 
   const drawFooter = () => {
@@ -169,8 +202,8 @@ export async function generatePdfBlob(positions, options = {}) {
   let globalPosIdx = 0;
   const renderedPositions = [];
 
-  for (let chIdx = 0; chIdx < chaptersToRender.length; chIdx++) {
-    const ch = chaptersToRender[chIdx];
+  for (let cItemIdx = 0; cItemIdx < chaptersToRender.length; cItemIdx++) {
+    const ch = chaptersToRender[cItemIdx];
     const chPositions = positions.slice(ch.from - 1, ch.to);
     
     if (chPositions.length === 0) {
@@ -178,14 +211,14 @@ export async function generatePdfBlob(positions, options = {}) {
       continue;
     }
 
-    if (chIdx > 0) {
+    if (cItemIdx > 0) {
       drawFooter();
       doc.addPage();
       currentPage++;
     }
 
     const chapterStartPage = currentPage;
-    tocEntries.push({ page: chapterStartPage });
+    tocEntries.push({ page: chapterStartPage, item: ch });
 
     drawHeader(ch.name);
 
@@ -231,8 +264,6 @@ export async function generatePdfBlob(positions, options = {}) {
         const fenForUrl = pos.fen.replace(/ /g, '_');
         const color = pos.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
         const fenUrl = `https://lichess.org/analysis/${fenForUrl}?color=${color}`;
-        // Link on turn indicator (last rank row, right side)
-        const indicatorLineIdx = showCoords ? 9 : 9; // bottom rows of diagram
         const indicatorY = y + (lines.length - 2) * (fontPt * 0.95) - fontPt * 0.5;
         const indicatorX = x + boxWidth / 2 - fontPt;
         doc.link(indicatorX, indicatorY, fontPt, fontPt, { url: fenUrl });
@@ -240,7 +271,9 @@ export async function generatePdfBlob(positions, options = {}) {
 
       // Diagram title / number
       let titleStr = `${globalPosIdx + 1}`;
-      if (titleMode === 'comment') {
+      if (titleMode === 'chapter_number') {
+        titleStr = `${ch.chapterNum}.${i + 1}`;
+      } else if (titleMode === 'comment') {
         titleStr = pos.comment || `${globalPosIdx + 1}`;
       } else if (titleMode === 'custom') {
         titleStr = options.customTitle || `${globalPosIdx + 1}`;
@@ -293,7 +326,7 @@ export async function generatePdfBlob(positions, options = {}) {
     }
     
     // After the chapter ends, if it's the last chapter, draw footer
-    if (chIdx === chaptersToRender.length - 1) {
+    if (cItemIdx === chaptersToRender.length - 1) {
       drawFooter();
     }
   }
@@ -400,20 +433,40 @@ export async function generatePdfBlob(positions, options = {}) {
     let y = 100;
 
     const tocList = [];
-    if (chapters && chapters.length > 0) {
-      chapters.forEach((ch, idx) => {
-        if (!tocEntries[idx]) return;
+    if (tocEntries && tocEntries.length > 0) {
+      let lastParentName = null;
+      tocEntries.forEach((entry) => {
+        if (!entry) return;
+        const item = entry.item;
+        if (!item) return;
+
+        // If subchapter, check if we need to output parent chapter heading first if not added
+        if (item.isSubchapter && item.parentName !== lastParentName) {
+          tocList.push({
+            name: item.parentName,
+            range: '',
+            page: entry.page,
+            isIndent: false,
+            isBold: true
+          });
+          lastParentName = item.parentName;
+        }
+
         tocList.push({
-          name: ch.name || `Chapter ${idx + 1}`,
-          range: `(${ch.from}–${ch.to})`,
-          page: tocEntries[idx] ? tocEntries[idx].page : 1
+          name: item.isSubchapter ? item.subName : (item.name || options.diagramsTitle || 'Диаграммы'),
+          range: `(${item.from}–${item.to})`,
+          page: entry.page,
+          isIndent: item.isSubchapter,
+          isBold: !item.isSubchapter
         });
       });
     } else {
       tocList.push({
         name: options.diagramsTitle || 'Diagrams',
         range: `(1–${positions.length})`,
-        page: tocEntries[0] ? tocEntries[0].page : 1
+        page: tocEntries[0] ? tocEntries[0].page : 1,
+        isIndent: false,
+        isBold: false
       });
     }
 
@@ -421,7 +474,9 @@ export async function generatePdfBlob(positions, options = {}) {
       tocList.push({
         name: answersOpt.title || 'Solutions',
         range: '',
-        page: answersStartPage
+        page: answersStartPage,
+        isIndent: false,
+        isBold: true
       });
     }
 
@@ -432,11 +487,16 @@ export async function generatePdfBlob(positions, options = {}) {
         y = 60;
       }
 
-      const label = item.range ? `${idx + 1}. ${item.name} ${item.range}` : `${idx + 1}. ${item.name}`;
-      doc.text(label, 50, y);
+      const indentX = item.isIndent ? 70 : 50;
+      setTextFont(doc, item.isBold ? 'bold' : 'normal');
+
+      const label = item.range ? `${item.name} ${item.range}` : `${item.name}`;
+      doc.text(label, indentX, y);
       
-      doc.text(`${item.page}`, pageWidth - 50, y, { align: 'right' });
-      doc.link(50, y - 12, pageWidth - 100, 16, { pageNumber: item.page });
+      if (item.page) {
+        doc.text(`${item.page}`, pageWidth - 50, y, { align: 'right' });
+        doc.link(indentX, y - 12, pageWidth - 100, 16, { pageNumber: item.page });
+      }
       
       y += 24;
     });
