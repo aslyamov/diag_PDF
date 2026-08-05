@@ -287,6 +287,7 @@ export async function generatePdfBlob(positions, options = {}) {
       const linesCount = options.notationLinesCount || 0;
       const isNumbered = options.notationLinesMode === 'numbered';
       if (linesCount > 0) {
+        const isBlackToMove = pos.fen ? pos.fen.split(/\s+/)[1] === 'b' : false;
         setTextFont(doc, 'normal');
         doc.setFontSize(8);
         
@@ -307,16 +308,23 @@ export async function generatePdfBlob(positions, options = {}) {
           const numPrefix = isNumbered ? `${l}. ` : '';
           const prefixW = isNumbered ? doc.getTextWidth(numPrefix) : 0;
           
-          // White move column (Left)
-          if (isNumbered) {
+          // White move column (Left) - skip line for 1st move if black to move
+          if (l > 1 || !isBlackToMove) {
+            if (isNumbered) {
+              doc.text(numPrefix, leftX, lineY);
+            }
+            doc.setDrawColor(0);
+            doc.setLineWidth(1.0);
+            doc.line(leftX + prefixW, lineY + 1, leftX + colW, lineY + 1);
+          } else if (isNumbered) {
+            // Still render "1. " label even if white move line is omitted when black to move
             doc.text(numPrefix, leftX, lineY);
           }
-          doc.setDrawColor(180);
-          doc.setLineWidth(0.5);
-          doc.line(leftX + prefixW, lineY + 1, leftX + colW, lineY + 1);
 
           // Black move column (Right)
           const rightX = leftX + colW + gap;
+          doc.setDrawColor(0);
+          doc.setLineWidth(1.0);
           doc.line(rightX, lineY + 1, leftX + innerBoardWidth, lineY + 1);
         }
       }
