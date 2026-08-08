@@ -186,16 +186,24 @@ export async function generatePdfBlob(positions, options = {}) {
   }
 
   const drawFooter = () => {
+    const prevFont = doc.getFont();
+    const prevSize = doc.getFontSize();
     setTextFont(doc, 'normal');
     doc.setFontSize(9);
     doc.text(`${currentPage}`, pageWidth / 2, pageHeight - 18, { align: 'center' });
+    if (prevFont) doc.setFont(prevFont.fontName, prevFont.fontStyle);
+    if (prevSize) doc.setFontSize(prevSize);
   };
 
   const drawHeader = (chName) => {
     if (chName) {
+      const prevFont = doc.getFont();
+      const prevSize = doc.getFontSize();
       setTextFont(doc, 'normal');
       doc.setFontSize(10);
       doc.text(chName, pageWidth / 2, marginY - 20, { align: 'center' });
+      if (prevFont) doc.setFont(prevFont.fontName, prevFont.fontStyle);
+      if (prevSize) doc.setFontSize(prevSize);
     }
   };
 
@@ -237,7 +245,6 @@ export async function generatePdfBlob(positions, options = {}) {
       const row = Math.floor(pageItemIdx / cols);
 
       const x = marginX + col * gridW + gridW / 2;
-      const y = marginY + row * gridH + 30;
 
       let flip = false;
       let flipAuto = true;
@@ -246,27 +253,48 @@ export async function generatePdfBlob(positions, options = {}) {
 
       const lines = fenToDiagram(pos.fen, { coords: showCoords, symbol, flip, flipAuto });
 
+      // Calculate exact total vertical height needed and scale diagram size appropriately
+      const linesCount = options.notationLinesCount || 0;
+      const titleMargin = 20;
+      const bottomPadding = 15;
+      const availableH = gridH - titleMargin - bottomPadding;
+      
+      // Height = 10 lines of diagram * (fontPt * 0.95) + linesCount * lineSpacing
+      // Desired lineSpacing is ~14pt (or at least 12pt)
+      const lineSpacing = 14;
+      const maxDiagH = availableH - (linesCount * lineSpacing);
+
+      let effectiveFontPt = fontPt;
+      if (10 * (fontPt * 0.95) > maxDiagH) {
+        effectiveFontPt = Math.max(10, Math.floor(maxDiagH / (10 * 0.95)));
+      }
+
+      // Vertically position top of diagram in the grid
+      const actualDiagH = 10 * (effectiveFontPt * 0.95);
+      const totalBlockH = actualDiagH + (linesCount > 0 ? (linesCount * lineSpacing + 6) : 0);
+      const cellStartY = marginY + row * gridH;
+      const topOffset = Math.max(25, (gridH - totalBlockH) / 2);
+      const y = cellStartY + topOffset;
+
       doc.setFont(activeFontName, 'normal');
-      doc.setFontSize(fontPt);
+      doc.setFontSize(effectiveFontPt);
 
       let boxWidth = 0;
-      let boxHeight = lines.length * (fontPt * 0.95);
-
       lines.forEach((line, lineIdx) => {
         const textToRender = hasCustomFont ? chessStr(line) : line;
         const lineWidth = doc.getTextWidth(textToRender);
         if (lineWidth > boxWidth) boxWidth = lineWidth;
 
-        doc.text(textToRender, x, y + lineIdx * (fontPt * 0.95), { align: 'center' });
+        doc.text(textToRender, x, y + lineIdx * (effectiveFontPt * 0.95), { align: 'center' });
       });
 
       if (options.lichessLinks && pos.fen) {
         const fenForUrl = pos.fen.replace(/ /g, '_');
         const color = pos.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
         const fenUrl = `https://lichess.org/analysis/${fenForUrl}?color=${color}`;
-        const indicatorY = y + (lines.length - 2) * (fontPt * 0.95) - fontPt * 0.5;
-        const indicatorX = x + boxWidth / 2 - fontPt;
-        doc.link(indicatorX, indicatorY, fontPt, fontPt, { url: fenUrl });
+        const indicatorY = y + (lines.length - 2) * (effectiveFontPt * 0.95) - effectiveFontPt * 0.5;
+        const indicatorX = x + boxWidth / 2 - effectiveFontPt;
+        doc.link(indicatorX, indicatorY, effectiveFontPt, effectiveFontPt, { url: fenUrl });
       }
 
       // Diagram title / number
@@ -284,18 +312,17 @@ export async function generatePdfBlob(positions, options = {}) {
       doc.text(titleStr, x, y - 8 + (titleOffset || 0), { align: 'center' });
 
       // Notation lines / blank lines below diagram
-      const linesCount = options.notationLinesCount || 0;
       const isNumbered = options.notationLinesMode === 'numbered';
       if (linesCount > 0) {
         const isBlackToMove = pos.fen ? pos.fen.split(/\s+/)[1] === 'b' : false;
         setTextFont(doc, 'normal');
         doc.setFontSize(8);
         
-        const startY = y + lines.length * (fontPt * 0.95) + 6;
-        const lineSpacing = Math.max(14, fontPt * 0.6);
+        const startY = y + lines.length * (effectiveFontPt * 0.95) + 8;
+        const lineSpacing = 14;
         
         // Exact inner board width (8 board cells out of 10 total diagram width)
-        const cellPt = fontPt;
+        const cellPt = effectiveFontPt;
         const innerBoardWidth = 8 * cellPt;
         
         // Center lines exactly under the 8 cells

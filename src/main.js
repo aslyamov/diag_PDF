@@ -263,6 +263,11 @@ function renderChapters() {
       if (isNaN(val)) return;
       ch.from = Math.max(1, Math.min(val, total));
       if (ch.to < ch.from) ch.to = ch.from;
+      if (ch.subchapters && ch.subchapters.length > 0) {
+        if (ch.subchapters[0].from < ch.from) ch.subchapters[0].from = ch.from;
+        const lastSub = ch.subchapters[ch.subchapters.length - 1];
+        if (lastSub.to < ch.from) lastSub.to = ch.to;
+      }
       refreshPreview();
     });
 

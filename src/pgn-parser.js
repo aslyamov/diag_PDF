@@ -1,6 +1,5 @@
 // ─── PGN / FEN / EPD Parser ───────────────────────────────────────────
 
-const TAG_RE = /\[(\w+)\s+"([^"]*)"\]/g;
 
 /**
  * Extract first text comment from PGN move text.
@@ -23,6 +22,7 @@ function firstTextComment(movesRaw) {
  */
 export function parsePgn(content) {
   const positions = [];
+  const tagRe = /\[(\w+)\s+"([^"]*)"\]/g;
   // Split on [Event boundaries or start of tags block
   const blocks = content.split(/(?=^\[Event\b)/im);
 
@@ -32,7 +32,7 @@ export function parsePgn(content) {
     // Extract tags
     const tags = {};
     let tagEnd = 0;
-    for (const m of block.matchAll(TAG_RE)) {
+    for (const m of block.matchAll(tagRe)) {
       tags[m[1]] = m[2];
       tagEnd = Math.max(tagEnd, m.index + m[0].length);
     }
