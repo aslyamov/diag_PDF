@@ -4,6 +4,30 @@ import { fenToDiagram, chessStr } from './board-renderer.js';
 
 const fontCache = {};
 
+/**
+ * Convert English algebraic notation to Russian.
+ * @param {string} text - PGN move text
+ * @param {boolean} figurineMode - true if figurine font handles piece letters
+ * @returns {string} Converted text
+ */
+function convertNotation(text, figurineMode) {
+  if (!text) return text;
+  const pieces = { K: 'Кр', Q: 'Ф', R: 'Л', B: 'С', N: 'К' };
+
+  let r = text;
+
+  if (!figurineMode) {
+    // Replace piece letters K, Q, R, B, N
+    r = r.replace(/\b([KQRBN])(?=[a-h1-8x:+#=]|\b)/g, m => pieces[m] || m);
+    r = r.replace(/=([QRBN])/g, (_, p) => '=' + (pieces[p] || p));
+  }
+
+  // Action symbols
+  r = r.replace(/x(?=[a-h])/g, ':');  // capture
+
+  return r;
+}
+
 async function loadFontIntoDoc(doc, file, fontName) {
   let b64 = fontCache[file];
   if (b64 === undefined) {
@@ -396,7 +420,12 @@ export async function generatePdfBlob(positions, options = {}) {
 
     answersPositions.forEach((item) => {
       const { globalIdx, pos } = item;
-      const solutionText = pos.moves || pos.comment || pos.fen || '—';
+      let solutionText = pos.moves || pos.comment || pos.fen || '—';
+
+      // If RobotoRU is chosen, run Russian notation converter for text font
+      if (answersOpt.figurineFont === 'RobotoRU') {
+        solutionText = convertNotation(solutionText, false);
+      }
       
       // Calculate how many lines of text this entry will take
       setTextFont(doc, 'normal');

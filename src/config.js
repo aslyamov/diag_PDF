@@ -62,7 +62,7 @@ export const FONT_FILES = {
 export const FONT_NAMES = Object.keys(FONT_FILES);
 
 // Figurine notation fonts
-export const FIGURINE_FONTS = ['Zurich', 'Hastings', 'Linares', 'Aries', 'Letter', 'Time'];
+export const FIGURINE_FONTS = ['Zurich', 'Hastings', 'Linares', 'Aries', 'Letter', 'Time', 'RobotoRU'];
 export const FIGURINE_FILES = {
   Zurich:   'ZurichFigurine.TTF',
   Hastings: 'HastingsFigurine.TTF',
@@ -70,6 +70,7 @@ export const FIGURINE_FILES = {
   Aries:    'SpArFgRg.ttf',
   Letter:   'SpLtFgRg.ttf',
   Time:     'SpTmFgRg.ttf',
+  RobotoRU: null,
 };
 
 // Page geometry (A4, mm)
@@ -142,7 +143,7 @@ export const T = {
     enable_answers:   'Enable answers',
     answers_title:    'Answers title:',
     answers_cols:     'Columns:',
-    figurine_font:    'Figurine font:',
+    figurine_font:    'Font:',
     dark_theme:       'Dark',
     light_theme:      'Light',
     drop_hint:        'Drop .pgn / .fen / .epd file here or click to browse',
@@ -210,7 +211,7 @@ export const T = {
     enable_answers:   'Включить ответы',
     answers_title:    'Заголовок ответов:',
     answers_cols:     'Колонки:',
-    figurine_font:    'Фигуринный шрифт:',
+    figurine_font:    'Шрифт:',
     dark_theme:       'Тёмная',
     light_theme:      'Светлая',
     drop_hint:        'Перетащите .pgn / .fen / .epd файл сюда или нажмите для выбора',

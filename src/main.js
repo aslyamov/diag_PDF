@@ -503,7 +503,7 @@ function getPdfOptions() {
       enable: document.getElementById('opt-answers-enable')?.checked || false,
       title: document.getElementById('opt-answers-title')?.value || t('solutions'),
       cols: document.getElementById('opt-answers-cols')?.value || '1',
-      figurineFont: document.getElementById('opt-figurine-font')?.value || 'AlphaDG'
+      figurineFont: document.getElementById('opt-figurine-font')?.value || 'Zurich'
     }
   };
 }

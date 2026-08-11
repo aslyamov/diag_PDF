@@ -21,7 +21,10 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
   }
 
   if (cachedPdf) {
-    try { cachedPdf.destroy(); } catch (e) { console.warn('PDF cleanup:', e); }
+    try {
+      if (typeof cachedPdf.destroy === 'function') cachedPdf.destroy();
+      else if (typeof cachedPdf.cleanup === 'function') cachedPdf.cleanup();
+    } catch (e) { console.warn('PDF cleanup:', e); }
     cachedPdf = null;
   }
 
