@@ -12,14 +12,13 @@ async function loadFontIntoDoc(doc, file, fontName) {
       const res = await fetch(url);
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && !contentType.includes('text/html')) {
-        const buffer = await res.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        b64 = btoa(binary);
+        const blob = await res.blob();
+        b64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
         fontCache[file] = b64;
       } else {
         fontCache[file] = false;
@@ -290,7 +289,8 @@ export async function generatePdfBlob(positions, options = {}) {
 
       if (options.lichessLinks && pos.fen) {
         const fenForUrl = pos.fen.replace(/ /g, '_');
-        const color = pos.fen.split(/\s+/)[1] === 'b' ? 'black' : 'white';
+        const fenParts = pos.fen.split(/\s+/);
+        const color = (fenParts.length > 1 && fenParts[1] === 'b') ? 'black' : 'white';
         const fenUrl = `https://lichess.org/analysis/${fenForUrl}?color=${color}`;
         const indicatorY = y + (lines.length - 2) * (effectiveFontPt * 0.95) - effectiveFontPt * 0.5;
         const indicatorX = x + boxWidth / 2 - effectiveFontPt;
@@ -314,7 +314,8 @@ export async function generatePdfBlob(positions, options = {}) {
       // Notation lines / blank lines below diagram
       const isNumbered = options.notationLinesMode === 'numbered';
       if (linesCount > 0) {
-        const isBlackToMove = pos.fen ? pos.fen.split(/\s+/)[1] === 'b' : false;
+        const fenPartsM = pos.fen ? pos.fen.split(/\s+/) : [];
+        const isBlackToMove = fenPartsM.length > 1 && fenPartsM[1] === 'b';
         setTextFont(doc, 'normal');
         doc.setFontSize(8);
         
@@ -379,7 +380,7 @@ export async function generatePdfBlob(positions, options = {}) {
     doc.setFontSize(18);
     doc.text(answersOpt.title || 'Solutions', pageWidth / 2, 60, { align: 'center' });
 
-    const ansCols = parseInt(answersOpt.cols) || 1;
+    const ansCols = parseInt(answersOpt.cols, 10) || 1;
     const marginX = 40;
     const startY = 90;
     const maxY = pageHeight - 60;

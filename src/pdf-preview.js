@@ -16,12 +16,12 @@ export async function renderPdfPreview(pdfBlob, pageNum, canvasEl) {
   if (currentRenderTask) {
     try {
       currentRenderTask.cancel();
-    } catch (e) {}
+    } catch (e) { console.warn('PDF render cancel:', e); }
     currentRenderTask = null;
   }
 
   if (cachedPdf) {
-    try { cachedPdf.destroy(); } catch (e) {}
+    try { cachedPdf.destroy(); } catch (e) { console.warn('PDF cleanup:', e); }
     cachedPdf = null;
   }
 

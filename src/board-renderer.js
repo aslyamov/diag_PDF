@@ -25,7 +25,7 @@ export function parseFen(fenStr) {
       rank--;
       file = 0;
     } else if (ch >= '1' && ch <= '8') {
-      file += parseInt(ch);
+      file += parseInt(ch, 10);
     } else {
       if (rank >= 0 && rank <= 7 && file >= 0 && file <= 7) {
         board[rank][file] = ch;

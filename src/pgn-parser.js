@@ -132,7 +132,7 @@ export function parseEpd(content) {
  * @returns {Array} positions
  */
 export function parseFile(content, filename) {
-  const ext = (filename.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+  const ext = (filename?.match(/\.[^.]+$/) || [''])[0].toLowerCase();
   if (ext === '.pgn') return parsePgn(content);
   if (ext === '.fen') return parseFenFile(content);
   if (ext === '.epd') return parseEpd(content);

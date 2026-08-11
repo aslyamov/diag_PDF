@@ -3,14 +3,23 @@ import { T, LAYOUTS, FONT_NAMES, DEFAULT_LAYOUT, FIGURINE_FONTS } from './config
 import { parseFile } from './pgn-parser.js';
 
 // ─── State ─────────────────────────────────────────────────────────────
+function safeGetItem(key, fallback) {
+  try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
+}
 const state = {
-  lang: localStorage.getItem('diagpdf-lang') || 'en',
-  theme: localStorage.getItem('diagpdf-theme') || 'dark',
+  lang: safeGetItem('diagpdf-lang', 'en'),
+  theme: safeGetItem('diagpdf-theme', 'dark'),
   positions: [],
   filename: '',
   chapters: [],
   previewPage: 0,
+  dirtyFields: new Set(),
 };
+
+/** Escape HTML special chars to prevent XSS when building innerHTML */
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ─── i18n ──────────────────────────────────────────────────────────────
 function t(key) {
@@ -29,38 +38,26 @@ function applyLang() {
     }
   });
 
-  // Default localized values for Cover inputs if unmodified
+  // Default localized values for Cover inputs if unmodified by user
   const todayStr = new Date().toLocaleDateString(state.lang === 'ru' ? 'ru-RU' : 'en-US');
   const coverDateInput = document.getElementById('opt-cover-date');
   if (coverDateInput) {
     coverDateInput.value = todayStr;
   }
 
-  const coverTitleInput = document.getElementById('opt-cover-title');
-  if (coverTitleInput && (!coverTitleInput.value || coverTitleInput.value === 'Chess Puzzles' || coverTitleInput.value === 'Шахматные задачи')) {
-    coverTitleInput.value = t('cover_default_title');
-  }
-
-  const coverSubtitleInput = document.getElementById('opt-cover-subtitle');
-  if (coverSubtitleInput && (!coverSubtitleInput.value || coverSubtitleInput.value === 'Mate in 1' || coverSubtitleInput.value === 'Мат в 1 ход')) {
-    coverSubtitleInput.value = t('cover_default_subtitle');
-  }
-
-  const coverAuthorInput = document.getElementById('opt-cover-author');
-  if (coverAuthorInput && (!coverAuthorInput.value || coverAuthorInput.value === 'Ivan Ivanov' || coverAuthorInput.value === 'Иванов Иванов')) {
-    coverAuthorInput.value = t('cover_default_author');
-  }
-
-  // Default localized values for TOC and Answers inputs if unmodified
-  const tocInput = document.getElementById('opt-toc-title');
-  if (tocInput && (!tocInput.value || tocInput.value === 'Contents' || tocInput.value === 'Содержание' || tocInput.value === 'Оглавление')) {
-    tocInput.value = t('contents');
-  }
-
-  const answersInput = document.getElementById('opt-answers-title');
-  if (answersInput && (!answersInput.value || answersInput.value === 'Solutions' || answersInput.value === 'Решения')) {
-    answersInput.value = t('solutions');
-  }
+  const localizableFields = [
+    ['opt-cover-title',    'cover_default_title'],
+    ['opt-cover-subtitle', 'cover_default_subtitle'],
+    ['opt-cover-author',   'cover_default_author'],
+    ['opt-toc-title',      'contents'],
+    ['opt-answers-title',  'solutions'],
+  ];
+  localizableFields.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el && !state.dirtyFields.has(id)) {
+      el.value = t(key);
+    }
+  });
 
   // Update layout select labels
   const layoutSelect = document.getElementById('opt-layout');
@@ -204,11 +201,12 @@ function renderChapters() {
 
   let html = '';
   state.chapters.forEach((ch, chIdx) => {
+    const eName = escHtml(ch.name);
     html += `
       <div class="chapter-card p-2 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs space-y-2">
         <div class="chapter-item flex items-center gap-2" data-id="${ch.id}">
           <span class="text-xs font-bold text-gray-500 w-5 text-center select-none">${chIdx + 1}.</span>
-          <input type="text" value="${ch.name}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
+          <input type="text" value="${eName}" placeholder="${t('chapter_name')}" class="chapter-name input flex-1 text-xs font-medium px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg" title="${t('chapter_name')}">
           <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
             <input type="number" value="${ch.from}" min="1" max="${total}" class="chapter-from w-11 text-center text-xs font-semibold bg-transparent outline-none" title="${t('chapter_from')}">
             <span class="text-gray-400 font-bold text-xs select-none">–</span>
@@ -225,10 +223,11 @@ function renderChapters() {
     if (ch.subchapters && ch.subchapters.length > 0) {
       html += `<div class="subchapters-list pl-6 space-y-1.5 border-l-2 border-indigo-200 dark:border-indigo-800 ml-2">`;
       ch.subchapters.forEach((sc, scIdx) => {
+        const eScName = escHtml(sc.name);
         html += `
           <div class="subchapter-item flex items-center gap-2" data-id="${sc.id}" data-parent-id="${ch.id}">
             <span class="text-xs font-medium text-gray-400 w-6 text-center select-none">${chIdx + 1}.${scIdx + 1}</span>
-            <input type="text" value="${sc.name}" placeholder="${t('subchapter_name')}" class="chapter-name input flex-1 text-xs px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md">
+            <input type="text" value="${eScName}" placeholder="${t('subchapter_name')}" class="chapter-name input flex-1 text-xs px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md">
             <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md p-0.5">
               <input type="number" value="${sc.from}" min="${ch.from}" max="${ch.to}" class="chapter-from w-10 text-center text-xs font-medium bg-transparent outline-none">
               <span class="text-gray-400 text-xs select-none">–</span>
@@ -259,20 +258,21 @@ function renderChapters() {
     });
 
     item.querySelector('.chapter-from').addEventListener('input', e => {
-      let val = parseInt(e.target.value);
+      let val = parseInt(e.target.value, 10);
       if (isNaN(val)) return;
       ch.from = Math.max(1, Math.min(val, total));
       if (ch.to < ch.from) ch.to = ch.from;
       if (ch.subchapters && ch.subchapters.length > 0) {
-        if (ch.subchapters[0].from < ch.from) ch.subchapters[0].from = ch.from;
-        const lastSub = ch.subchapters[ch.subchapters.length - 1];
-        if (lastSub.to < ch.from) lastSub.to = ch.to;
+        ch.subchapters.forEach(sc => {
+          sc.from = Math.max(ch.from, Math.min(sc.from, ch.to));
+          sc.to = Math.max(sc.from, Math.min(sc.to, ch.to));
+        });
       }
       refreshPreview();
     });
 
     item.querySelector('.chapter-from').addEventListener('change', e => {
-      let newFrom = parseInt(e.target.value) || 1;
+      let newFrom = parseInt(e.target.value, 10) || 1;
       const minAllowed = chIndex > 0 ? state.chapters[chIndex - 1].to + 1 : 1;
       if (newFrom < minAllowed) newFrom = minAllowed;
       if (newFrom > total) newFrom = total;
@@ -280,9 +280,10 @@ function renderChapters() {
       if (ch.to < ch.from) ch.to = ch.from;
 
       if (ch.subchapters && ch.subchapters.length > 0) {
-        if (ch.subchapters[0].from < ch.from) ch.subchapters[0].from = ch.from;
-        const lastSub = ch.subchapters[ch.subchapters.length - 1];
-        lastSub.to = ch.to;
+        ch.subchapters.forEach(sc => {
+          sc.from = Math.max(ch.from, Math.min(sc.from, ch.to));
+          sc.to = Math.max(sc.from, Math.min(sc.to, ch.to));
+        });
       }
 
       renderChapters();
@@ -290,16 +291,17 @@ function renderChapters() {
     });
 
     item.querySelector('.chapter-to').addEventListener('change', e => {
-      let newTo = parseInt(e.target.value) || ch.from;
+      let newTo = parseInt(e.target.value, 10) || ch.from;
       if (newTo < ch.from) newTo = ch.from;
       if (newTo > total) newTo = total;
       ch.to = newTo;
 
-      // Auto-pull last subchapter to match new parent chapter 'to'
+      // Clamp ALL subchapters to fit within updated parent boundaries
       if (ch.subchapters && ch.subchapters.length > 0) {
-        const lastSub = ch.subchapters[ch.subchapters.length - 1];
-        lastSub.to = ch.to;
-        if (lastSub.from > lastSub.to) lastSub.from = lastSub.to;
+        ch.subchapters.forEach(sc => {
+          sc.from = Math.max(ch.from, Math.min(sc.from, ch.to));
+          sc.to = Math.max(sc.from, Math.min(sc.to, ch.to));
+        });
       }
 
       for (let i = chIndex + 1; i < state.chapters.length; i++) {
@@ -335,7 +337,7 @@ function renderChapters() {
     });
 
     item.querySelector('.chapter-from').addEventListener('change', e => {
-      let newFrom = parseInt(e.target.value) || parent.from;
+      let newFrom = parseInt(e.target.value, 10) || parent.from;
       const minAllowed = scIndex > 0 ? parent.subchapters[scIndex - 1].to + 1 : parent.from;
       if (newFrom < minAllowed) newFrom = minAllowed;
       if (newFrom > parent.to) newFrom = parent.to;
@@ -346,7 +348,7 @@ function renderChapters() {
     });
 
     item.querySelector('.chapter-to').addEventListener('change', e => {
-      let newTo = parseInt(e.target.value) || sc.from;
+      let newTo = parseInt(e.target.value, 10) || sc.from;
       if (newTo < sc.from) newTo = sc.from;
       if (newTo > parent.to) newTo = parent.to;
       sc.to = newTo;
@@ -522,6 +524,7 @@ function loadSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
     const opts = JSON.parse(raw);
+    if (!opts || typeof opts !== 'object') return;
 
     const setVal = (id, val) => {
       const el = document.getElementById(id);
@@ -694,11 +697,24 @@ function init() {
     '#opt-answers-cols', '#opt-figurine-font', '#opt-lichess'
   ];
 
+  let saveTimer = null;
+  const debouncedSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveSettings(), 400);
+  };
+
+  // Mark localizable fields dirty on user edit
+  const localizableIds = ['opt-cover-title', 'opt-cover-subtitle', 'opt-cover-author', 'opt-toc-title', 'opt-answers-title'];
+  localizableIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => state.dirtyFields.add(id));
+  });
+
   autoUpdateSelectors.forEach(sel => {
     const el = document.querySelector(sel);
     if (el) {
       const handler = () => {
-        saveSettings();
+        debouncedSave();
         refreshPreview();
       };
       el.addEventListener('change', handler);
